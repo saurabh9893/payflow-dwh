@@ -1,0 +1,24 @@
+# Virtual environment
+venv/
+
+# Delta Lake data (too large for GitHub)
+lakehouse/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Spark temp files
+derby.log
+metastore_db/
+
+# VS Code
+.vscode/
+
+# Environment variables
+.env
+
+# Egg info from pip install -e
+*.egg-info/
