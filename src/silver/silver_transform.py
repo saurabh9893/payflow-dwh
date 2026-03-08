@@ -5,6 +5,7 @@ from pyspark.sql.types import (
 )
 from loguru import logger
 from datetime import datetime
+from delta.tables import DeltaTable
 
 # Paths
 BRONZE_PATH = "lakehouse/bronze"
@@ -246,6 +247,65 @@ def transform_transactions(spark):
 
     logger.success(f"✅ silver/transactions → {df.count():,} rows")
 
+def apply_customer_updates(spark):
+    logger.info("Applying customer updates to Silver")
+
+    updates_df = (
+        spark.read
+        .option("header", "true")
+        .option("inferSchema", "false")
+        .csv("data/raw/customer_updates.csv")
+    )
+
+
+    updates_df = (
+        updates_df
+        .withColumn("wallet_limit", F.col("wallet_limit").cast(IntegerType()))
+        .withColumn("created_date", F.col("created_date").cast(DateType()))
+        .withColumn("updated_date", F.col("updated_date").cast(DateType()))
+    )
+
+
+    updates_df = (
+        updates_df
+        .withColumn("kyc_tier",         F.trim(F.upper(F.col("kyc_tier"))))
+        .withColumn("customer_segment", F.trim(F.upper(F.col("customer_segment"))))
+        .withColumn("city",             F.trim(F.initcap(F.col("city"))))
+        .withColumn("state",            F.trim(F.upper(F.col("state"))))
+    )
+
+
+    updates_df = updates_df.withColumn(
+        "silver_loaded_at",
+        F.lit(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    )
+
+    silver_df = spark.read.format("delta").load(f"{SILVER_PATH}/customers")
+
+    silver_table = DeltaTable.forPath(spark, f"{SILVER_PATH}/customers")
+
+    (
+        silver_table.alias("target")
+        .merge(
+            updates_df.alias("source"),
+            "target.customer_id = source.customer_id"
+        )
+        .whenMatchedUpdate(
+            set={
+                "target.kyc_tier":          "source.kyc_tier",
+                "target.wallet_limit":      "source.wallet_limit",
+                "target.customer_segment":  "source.customer_segment",
+                "target.city":              "source.city",
+                "target.state":             "source.state",
+                "target.silver_loaded_at":  "source.silver_loaded_at",
+            }
+        )
+        .execute()
+    )
+
+    updated_count = updates_df.count()
+    logger.success(f"✅ Applied {updated_count:,} customer updates to Silver")
+
 
 def main():
     logger.info("Starting Silver Layer transformations")
@@ -257,6 +317,7 @@ def main():
         transform_merchants(spark)
         transform_payment_methods(spark)
         transform_transactions(spark)
+        apply_customer_updates(spark)
 
         logger.success("✅ Silver Layer transformations complete!")
 
