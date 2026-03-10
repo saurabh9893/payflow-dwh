@@ -100,7 +100,7 @@ dim_customer ——— fact_transaction ——— dim_merchant
 
 ### SCD Type 2 — Customer History
 <!-- Add screenshot showing dim_customer with historical rows -->
-![SCD2](docs/screenshots/scd2_customer.png)
+![SCD2](docs/screenshots/scd2.png)
 
 ### Analytics Queries Output
 <!-- Add screenshot of query results -->
